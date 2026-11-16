@@ -1,0 +1,18 @@
+[package]
+name = "schematic-cli"
+description = "Text (JSON) and binary forms of a schematic plan, and the checker that refuses a plan before it runs."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "schematic"
+path = "src/main.rs"
+
+[dependencies]
+schematic = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+
+[lints]
+workspace = true

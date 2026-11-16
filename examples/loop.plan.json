@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "steps": [
+    {
+      "id": "start",
+      "kind": "call",
+      "code": 9,
+      "out_edges": [{ "to": "fetch" }]
+    },
+    {
+      "id": "fetch",
+      "kind": "call",
+      "code": 7,
+      "inputs": { "url": "https://example.invalid/a", "limit": 10 },
+      "out_edges": [{ "to": "judge" }]
+    },
+    {
+      "id": "judge",
+      "kind": "request",
+      "form": {
+        "title": "Score the page",
+        "description": "Retry means the fixer runs once more before the report.",
+        "fields": [
+          {
+            "name": "branch",
+            "type": "choice",
+            "options": ["retry", "fine"],
+            "title": "Next"
+          },
+          {
+            "name": "score",
+            "type": "integer",
+            "title": "Score 0-10",
+            "description": "Higher is better."
+          }
+        ]
+      },
+      "out_edges": [
+        { "to": "fix", "when": "retry", "budget": 2 },
+        { "to": "report", "when": "*" }
+      ]
+    },
+    {
+      "id": "fix",
+      "kind": "call",
+      "target": { "address": "fixer", "entry": "run" },
+      "inputs": { "text": "$.fetch.body" },
+      "out_edges": [{ "to": "fetch" }]
+    },
+    {
+      "id": "report",
+      "kind": "send",
+      "subject": "memory/fact",
+      "inputs": { "score": "$.judge.score" }
+    }
+  ]
+}

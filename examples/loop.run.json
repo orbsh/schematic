@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "plan_hash": "sha256:example",
+  "params": { "query": "postgres vector search" },
+  "entries": [
+    {
+      "step": "start",
+      "pass": 0,
+      "attempt": 0,
+      "output": {}
+    }
+  ]
+}
