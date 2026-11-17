@@ -20,7 +20,8 @@ read. `body_len` must consume the document exactly: trailing bytes are an error,
 truncated tail is caught rather than silently ignored.
 
 Version 2 replaced the five kind tags (`ask`, `approve`, `emit`) with the three primitives and
-gave a request a structured form instead of an opaque schema string.
+gave a request a structured form instead of an opaque schema string. Version 3 added the `end`
+terminal tag.
 
 ## String table (both kinds)
 
@@ -42,7 +43,7 @@ Optional indices use `0xFFFF` for "none".
 Step record:
 
     id               u16 string index
-    kind             u8        1 call-code, 2 call-target, 3 request, 4 send
+    kind             u8        1 call-code, 2 call-target, 3 request, 4 send, 5 end
     --- call-code (1)
     code             u64
     --- call-target (2)
@@ -63,6 +64,8 @@ Step record:
     --- send (4)
     subject          u16
     payload          u32 len + JSON bytes, or 0xFFFFFFFF for none
+    --- end (5)
+    (no body: the tag is the whole record)
     --- all kinds
     input_count      u32
       each           u16 name index
@@ -128,7 +131,9 @@ The same model in JSON, with references as strings:
       "inputs": { "text": "$.fetch.body" },
       "out_edges": [{ "to": "fetch" }] },
     { "id": "report", "kind": "send", "subject": "memory/fact",
-      "inputs": { "score": "$.judge.score" } }
+      "inputs": { "score": "$.judge.score" },
+      "out_edges": [{ "to": "done" }] },
+    { "id": "done", "kind": "end", "inputs": { "score": "$.judge.score" } }
   ]
 }
 ```

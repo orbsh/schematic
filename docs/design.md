@@ -49,6 +49,10 @@ BPMN draws the same line (serviceTask / sendTask / receiveTask).
 `call` covers both the code-row case and the direct-target case because readiness, output key
 and budget are identical; only dispatch differs, and dispatch is the host's.
 
+`end` is not a fourth primitive: it dispatches nothing. It exists so that terminality is
+**declared** instead of inferred from "no out edges" — in a plan that is still being composed, a
+dangling step looks exactly like a finished one (§6 makes the difference a refusal).
+
 ## 3a. A request carries a form, not JSON Schema
 
 JSON Schema is a language — recursion, `$ref`, combinators, arbitrary nesting — and a language
@@ -114,10 +118,19 @@ Everything a plan can be refused for, refused before it runs:
 - every reference names a step that can have run before it (reachability), and that step is
   **guaranteed** — an entry, or reached by at least one unconditional edge. A reference that only
   a conditional edge reaches is a planned stall, so it is refused;
-- non-empty schema and subject; `fanout.max > 0`.
+- at least one `end` exists; a step with no out edges that is not an `end` is refused (an unwired
+  step and a finished one must not look alike); every step can reach an `end`; an `end` has no
+  out edges;
+- non-empty subject; a form that can be rendered; `fanout.max > 0`.
 
 A plan that passes can still stall at run time (`Readiness::stalled`), but it cannot be
 structurally impossible.
+
+These checks are the first of three layers that constrain a **liquid** definition — one that
+changes while runs exist. The others: every run records the hash of the plan it started with, so a
+history is always read against the version that produced it; and a flow's correctness is evidence,
+not a proof — a sub-flow that has reached its `end` many times is trusted the way a fact that has
+been asserted many times is.
 
 ## 7. The run document
 
@@ -132,6 +145,12 @@ of a pass is the fan-out collection's length capped by `fanout.max` — data, ag
 Reading: `$.step` is the latest attempt of the latest pass; `$.step.*.field` is every attempt of
 the latest pass as an array; `$input.name` is a run parameter.
 
+The document lives in the engine while the run moves; what the host persists is that document
+**serialized at a suspension point** — the engine stops, hands over its state, and restoring is the
+same bytes read back. So a crash replays from the last snapshot, and idempotency on
+`(step, pass, attempt)` is what makes the replay safe; a `send` that already left is the one
+side effect replay cannot undo, which is why its delivery key belongs to the host.
+
 ## 8. Step kinds and their outputs
 
 - `call` → whatever the callee returned. If the step branches, it must contain `"branch": "<label>"`.
@@ -141,6 +160,9 @@ the latest pass as an array; `$input.name` is a run parameter.
   `(plan_hash, step, item)`, so a revised plan voids its own approvals and nothing else.
 - `send` → nothing anyone reads. Delivery failures (no route) are recorded by the host and do not
   fail the run: send is publication, never coordination.
+- `end` → nothing. Its `inputs` are the run's result, and its completion is what makes a run
+  complete: `complete` means "an `end` fired and nothing else can start", never "nothing has any
+  out edges left".
 
 ## 9. Forks
 

@@ -4,7 +4,7 @@
 //! count. That is why this crate needs no token, no join type, and no counter: a join waits
 //! for values, and a value that can never arrive is a `stalled` run naming the reference.
 
-use crate::model::{Edge, Id, Path, Plan, Run, Step};
+use crate::model::{Edge, Id, Kind, Path, Plan, Run, Step};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
@@ -222,12 +222,14 @@ fn in_edges<'a>(plan: &'a Plan, id: &str) -> Vec<(&'a Step, &'a Edge)> {
     out
 }
 
-/// A plan is complete when every step with no out edges has finished and nothing is ready.
+/// A run is complete when an `end` has fired and nothing else can start. The exit is declared,
+/// so this is a fact about the plan rather than an inference from a dangling step: a liquid plan
+/// whose last step is unwired no longer passes for finished.
 fn is_complete(plan: &Plan, run: &Run) -> bool {
     plan.steps
         .iter()
-        .filter(|s| s.out_edges.is_empty())
-        .all(|s| run.passes_done(&s.id, 1) > 0)
+        .filter(|s| matches!(s.kind, Kind::End {}))
+        .any(|s| run.passes_done(&s.id, 1) > 0)
 }
 
 /// Why [`advance`] refused a completion.

@@ -36,6 +36,7 @@ this crate is a bug in the adapter.
 | `call` | one target: `code` (a code row on a mount) or `target` (an address + entry); the answer completes the step |
 | `request` | a `form` (a data definition, not data) and an optional opaque `resource`; the step does not complete until an answer arrives |
 | `send` | a subject; publishes one way and completes on delivery — nobody reads its output |
+| `end` | dispatches nothing; its `inputs` are the run's result, and its completion is what ends the run |
 | form | `title?`, `description?`, `fields[]`; a field is `{name, type, title?, description?, optional?, options?, default?}` with `type ∈ {bool, string, integer, number, choice}` |
 | approval | a request whose form is one `bool` field — the renderer shows a yes/no dialog; nothing else marks it as an approval |
 | `inputs` | the callee's own parameter names → a reference or a literal (the reads ARE the inputs) |

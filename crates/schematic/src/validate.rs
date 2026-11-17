@@ -36,6 +36,10 @@ pub enum Problem {
     BranchNotSelectable { step: String },
     DefaultKind { step: String, field: String },
     EmptySubject { step: String },
+    NoTerminal,
+    DeadEnd { step: String },
+    UnreachableTerminal { step: String },
+    TerminalWithEdges { step: String },
 }
 
 impl fmt::Display for Problem {
@@ -112,6 +116,22 @@ impl fmt::Display for Problem {
                 "step {step:?} field {field:?} has a default that does not match its type"
             ),
             Self::EmptySubject { step } => write!(f, "step {step:?} sends an empty subject"),
+            Self::NoTerminal => write!(
+                f,
+                "no step is an `end`: nothing would ever say the run finished"
+            ),
+            Self::DeadEnd { step } => write!(
+                f,
+                "step {step:?} has no out edges and is not an `end`: an unwired step and a finished one must not look alike"
+            ),
+            Self::UnreachableTerminal { step } => write!(
+                f,
+                "step {step:?} cannot reach an `end`: once entered, this path would have no way out"
+            ),
+            Self::TerminalWithEdges { step } => write!(
+                f,
+                "step {step:?} is an `end` and has out edges: a terminal leaves the run, it does not continue"
+            ),
         }
     }
 }
@@ -151,7 +171,64 @@ pub fn validate(plan: &Plan) -> Vec<Problem> {
     }
 
     check_cycle_budgets(plan, &mut problems);
+    check_terminals(plan, &mut problems);
     problems
+}
+
+/// Every step must be able to leave the run, and the exit is declared, not inferred.
+///
+/// A liquid graph makes "no out edges" ambiguous: it means "finished" in a complete plan and
+/// "not wired yet" in a half-composed one. So terminality is a kind (`end`), a step with no out
+/// edges that is not a terminal is refused, and every step must be able to reach one — otherwise
+/// a branch that fires once would have no way out.
+fn check_terminals(plan: &Plan, problems: &mut Vec<Problem>) {
+    let mut terminals = 0;
+
+    for step in &plan.steps {
+        if matches!(step.kind, Kind::End {}) {
+            terminals += 1;
+            if !step.out_edges.is_empty() {
+                problems.push(Problem::TerminalWithEdges {
+                    step: step.id.clone(),
+                });
+            }
+        } else if step.out_edges.is_empty() {
+            problems.push(Problem::DeadEnd {
+                step: step.id.clone(),
+            });
+        }
+
+        if !reaches_terminal(plan, &step.id) {
+            problems.push(Problem::UnreachableTerminal {
+                step: step.id.clone(),
+            });
+        }
+    }
+
+    if terminals == 0 {
+        problems.push(Problem::NoTerminal);
+    }
+}
+
+/// Whether `from` is, or can reach, an `end` step.
+fn reaches_terminal(plan: &Plan, from: &str) -> bool {
+    let mut seen = BTreeSet::new();
+    let mut queue = VecDeque::new();
+    queue.push_back(from.to_string());
+    while let Some(current) = queue.pop_front() {
+        let Some(step) = plan.step(&current) else {
+            continue;
+        };
+        if matches!(step.kind, Kind::End {}) {
+            return true;
+        }
+        for edge in &step.out_edges {
+            if seen.insert(edge.to.clone()) {
+                queue.push_back(edge.to.clone());
+            }
+        }
+    }
+    false
 }
 
 fn check_kind(step: &Step, problems: &mut Vec<Problem>) {
@@ -180,6 +257,9 @@ fn check_kind(step: &Step, problems: &mut Vec<Problem>) {
                 });
             }
         }
+        // `end` has nothing of its own to check: its edges are a terminal question, answered
+        // where the plan's shape is visible.
+        Kind::End {} => {}
     }
 }
 

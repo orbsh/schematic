@@ -24,8 +24,41 @@ fn call(id: &str) -> Step {
     }
 }
 
+/// A plan whose shapes are wired to an exit, so a test can assert about one defect without the
+/// terminal rules joining in: every step with no out edges gains an unconditional edge to a real
+/// `end`, and a plan with no terminal gets one.
 fn plan(steps: Vec<Step>) -> Plan {
+    let mut steps = steps;
+    if !steps.iter().any(|s| matches!(s.kind, Kind::End {})) {
+        steps.push(end());
+    }
+    for step in steps.iter_mut() {
+        if !matches!(step.kind, Kind::End {}) && step.out_edges.is_empty() {
+            step.out_edges.push(Edge {
+                to: END_ID.into(),
+                when: None,
+                budget: None,
+            });
+        }
+    }
     Plan::new(steps)
+}
+
+/// The same steps, with nothing added: for the terminal rules themselves.
+fn raw(steps: Vec<Step>) -> Plan {
+    Plan::new(steps)
+}
+
+const END_ID: &str = "__end";
+
+fn end() -> Step {
+    Step {
+        id: END_ID.into(),
+        kind: Kind::End {},
+        inputs: Inputs::new(),
+        fanout: None,
+        out_edges: Vec::new(),
+    }
 }
 
 fn problems(plan: &Plan) -> Vec<Problem> {
@@ -368,6 +401,67 @@ fn a_resource_is_opaque_but_must_be_an_object() {
 }
 
 #[test]
+fn a_plan_needs_a_declared_exit() {
+    let found = problems(&raw(vec![call("a")]));
+    assert!(found.contains(&Problem::NoTerminal));
+    assert!(found.contains(&Problem::DeadEnd { step: "a".into() }));
+}
+
+#[test]
+fn an_unwired_step_is_not_an_exit() {
+    let mut a = call("a");
+    a.out_edges.push(Edge {
+        to: "b".into(),
+        when: None,
+        budget: None,
+    });
+    let found = problems(&raw(vec![a, call("b"), end()]));
+    assert!(
+        found.contains(&Problem::DeadEnd {
+            step: "b".into()
+        }),
+        "a step with no out edges that is not an end is a half-composed plan, not a finish: {found:?}"
+    );
+    // The reachability rule cascades: with `b` dangling, neither `a` nor `b` can reach the exit.
+    assert!(found.contains(&Problem::UnreachableTerminal { step: "a".into() }));
+    assert!(found.contains(&Problem::UnreachableTerminal { step: "b".into() }));
+}
+
+#[test]
+fn a_path_that_never_reaches_the_exit_is_refused() {
+    let mut a = call("a");
+    a.out_edges.push(Edge {
+        to: "b".into(),
+        when: None,
+        budget: Some(3),
+    });
+    let mut b = call("b");
+    b.out_edges.push(Edge {
+        to: "a".into(),
+        when: None,
+        budget: Some(3),
+    });
+    let found = problems(&raw(vec![a, b]));
+    assert!(found.contains(&Problem::UnreachableTerminal { step: "a".into() }));
+    assert!(found.contains(&Problem::UnreachableTerminal { step: "b".into() }));
+    assert!(found.contains(&Problem::NoTerminal));
+}
+
+#[test]
+fn a_terminal_continues_nothing() {
+    let mut terminal = end();
+    terminal.out_edges.push(Edge {
+        to: "a".into(),
+        when: None,
+        budget: None,
+    });
+    let found = problems(&raw(vec![terminal]));
+    assert!(found.contains(&Problem::TerminalWithEdges {
+        step: END_ID.into()
+    }));
+}
+
+#[test]
 fn a_send_needs_a_subject() {
     let send = Step {
         id: "send".into(),
@@ -398,6 +492,7 @@ fn a_plan_from_another_schema_version_is_refused_not_reinterpreted() {
 
 #[test]
 fn an_empty_plan_has_nothing_to_run() {
-    let found = problems(&plan(Vec::new()));
+    let found = problems(&raw(Vec::new()));
     assert!(found.contains(&Problem::NoSteps));
+    assert!(found.contains(&Problem::NoTerminal));
 }

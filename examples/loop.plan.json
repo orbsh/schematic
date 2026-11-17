@@ -51,6 +51,12 @@
       "id": "report",
       "kind": "send",
       "subject": "memory/fact",
+      "inputs": { "score": "$.judge.score" },
+      "out_edges": [{ "to": "done" }]
+    },
+    {
+      "id": "done",
+      "kind": "end",
       "inputs": { "score": "$.judge.score" }
     }
   ]

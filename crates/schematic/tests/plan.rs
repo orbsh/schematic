@@ -38,7 +38,9 @@ const EXAMPLE: &str = r#"
       "inputs": { "text": "$.fetch.body" },
       "out_edges": [{ "to": "fetch" }] },
     { "id": "report", "kind": "send", "subject": "memory/fact",
-      "inputs": { "score": "$.judge.score" } }
+      "inputs": { "score": "$.judge.score" },
+      "out_edges": [{ "to": "done" }] },
+    { "id": "done", "kind": "end", "inputs": { "score": "$.judge.score" } }
   ]
 }
 "#;
@@ -48,7 +50,7 @@ const EXAMPLE: &str = r#"
 #[test]
 fn the_textual_form_is_the_plan() {
     let plan = plan_from_json(EXAMPLE).expect("the example parses");
-    assert_eq!(plan.steps.len(), 5);
+    assert_eq!(plan.steps.len(), 6);
     assert_eq!(plan.steps[0].id, "start");
     let judge = plan.step("judge").expect("judge exists");
     assert_eq!(judge.out_edges.len(), 2);

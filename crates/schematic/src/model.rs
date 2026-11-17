@@ -16,8 +16,8 @@ pub const PLAN_SCHEMA_VERSION: u16 = 1;
 
 /// The binary layout version of [`crate::codec`]. Version 2 replaced the five kind tags
 /// (`ask`, `approve`, `emit`) with the three primitives, and gave a request a structure
-/// instead of an opaque schema string.
-pub const FORMAT_VERSION: u16 = 2;
+/// instead of an opaque schema string. Version 3 added the `end` terminal tag.
+pub const FORMAT_VERSION: u16 = 3;
 
 /// A step's handle. Names, not numbers: a plan is read by people and by diagrams, and
 /// `$.summarize.paths` says more than `$.7.paths` at no cost (the binary form interns it).
@@ -77,12 +77,14 @@ impl Step {
     }
 }
 
-/// What a node does. Three primitives, and they differ in *when they complete*:
+/// What a node does. Three primitives that differ in *when they complete*, plus one terminal
+/// marker that is not an executor at all:
 ///
 /// - `call` — ask an executor for a result; the answer completes the step;
 /// - `request` — put a declarative ask to the outside world; the step does **not** complete
 ///   until data comes back, which is the single source of a run that stays pending for days;
-/// - `send` — put a message out one way; the step completes on delivery and nobody reads it.
+/// - `send` — put a message out one way; the step completes on delivery and nobody reads it;
+/// - `end` — dispatch nothing: this path is finished, and its inputs are the run's result.
 ///
 /// Interaction is a node kind, not an API a script calls.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -113,6 +115,13 @@ pub enum Kind {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         payload: Option<Value>,
     },
+    /// The terminal marker: this path is done. It dispatches nothing and its `inputs` are the
+    /// run's result.
+    ///
+    /// It exists because a liquid graph has no other stable stop condition. Without it,
+    /// "finished" and "not wired yet" are the same shape — a step with no out edges — and a
+    /// half-composed plan would report itself complete.
+    End {},
 }
 
 /// An addressable target outside this plan: the host's routing token plus the entry to call.

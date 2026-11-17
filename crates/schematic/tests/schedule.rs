@@ -44,6 +44,18 @@ fn edge(to: &str) -> Edge {
     }
 }
 
+/// The declared exit: a step that dispatches nothing, so a plan has a stop condition that is
+/// not "no out edges".
+fn exit(id: &str) -> Step {
+    Step {
+        id: id.to_string(),
+        kind: Kind::End {},
+        inputs: Inputs::new(),
+        fanout: None,
+        out_edges: Vec::new(),
+    }
+}
+
 fn labelled(to: &str, label: &str, budget: Option<u32>) -> Edge {
     Edge {
         to: to.to_string(),
@@ -90,7 +102,8 @@ fn a_chain_runs_one_step_at_a_time_with_inputs_resolved() {
     a.out_edges.push(edge("b"));
     let mut b = call("b");
     b.inputs = Inputs::new().with("value", "$.a.total");
-    let plan = Plan::new(vec![a, b]);
+    b.out_edges.push(edge("exit"));
+    let plan = Plan::new(vec![a, b, exit("exit")]);
     let mut run = run();
 
     let first = ready(&plan, &run);
@@ -105,8 +118,14 @@ fn a_chain_runs_one_step_at_a_time_with_inputs_resolved() {
 
     advance(&plan, &mut run, done("b", 0, 0, json!({ "ok": true }))).expect("append");
     let third = ready(&plan, &run);
-    assert!(third.complete, "{third:?}");
-    assert!(third.ready.is_empty());
+    assert_eq!(third.ready.len(), 1);
+    assert_eq!(third.ready[0].step, "exit");
+    assert!(!third.complete);
+
+    advance(&plan, &mut run, done("exit", 0, 0, json!({}))).expect("append");
+    let fourth = ready(&plan, &run);
+    assert!(fourth.complete, "{fourth:?}");
+    assert!(fourth.ready.is_empty());
 }
 
 /// A selector decides the branch; the fallback takes over when the emitted label matches no
@@ -187,7 +206,8 @@ fn a_fanout_runs_per_element_and_caps_at_its_maximum() {
         source: Path::parse("$.produce.items").unwrap(),
         max: 4,
     });
-    let plan = Plan::new(vec![produce, each]);
+    each.out_edges.push(edge("exit"));
+    let plan = Plan::new(vec![produce, each, exit("exit")]);
     let mut run = run();
 
     advance(
@@ -211,6 +231,9 @@ fn a_fanout_runs_per_element_and_caps_at_its_maximum() {
         )
         .expect("append");
     }
+    assert!(!ready(&plan, &run).complete);
+
+    advance(&plan, &mut run, done("exit", 0, 0, json!({}))).expect("append");
     assert!(ready(&plan, &run).complete);
 }
 

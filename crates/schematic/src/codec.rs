@@ -31,6 +31,7 @@ const TAG_CALL_CODE: u8 = 1;
 const TAG_CALL_TARGET: u8 = 2;
 const TAG_REQUEST: u8 = 3;
 const TAG_SEND: u8 = 4;
+const TAG_END: u8 = 5;
 
 const FIELD_BOOL: u8 = 1;
 const FIELD_STRING: u8 = 2;
@@ -174,6 +175,7 @@ pub fn encode_plan(plan: &Plan) -> Vec<u8> {
                     None => steps.extend_from_slice(&NO_BLOB.to_le_bytes()),
                 }
             }
+            Kind::End {} => steps.push(TAG_END),
         }
 
         steps.extend_from_slice(&(step.inputs.0.len() as u32).to_le_bytes());
@@ -321,6 +323,7 @@ pub fn decode_plan(bytes: &[u8]) -> Result<Plan, CodecError> {
                 let payload = cursor.optional_blob()?;
                 Kind::Send { subject, payload }
             }
+            TAG_END => Kind::End {},
             other => {
                 return Err(CodecError::BadTag {
                     what: "step",
