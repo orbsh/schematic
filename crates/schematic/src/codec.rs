@@ -435,6 +435,15 @@ pub fn encode_run(run: &Run) -> Vec<u8> {
     entries.extend_from_slice(&run.schema_version.to_le_bytes());
     let hash = strings.intern(&run.plan_hash);
     entries.extend_from_slice(&hash.to_le_bytes());
+    // Present-flag then index: an empty string is a legitimate value in a table,
+    // so its absence is said rather than inferred from it.
+    match &run.origin {
+        Some(origin) => {
+            entries.push(1);
+            entries.extend_from_slice(&strings.intern(origin).to_le_bytes());
+        }
+        None => entries.push(0),
+    }
     entries.extend_from_slice(&(run.params.len() as u32).to_le_bytes());
     for (name, value) in &run.params {
         entries.extend_from_slice(&strings.intern(name).to_le_bytes());
@@ -464,6 +473,10 @@ pub fn decode_run(bytes: &[u8]) -> Result<Run, CodecError> {
     let strings = cursor.string_table()?;
     let schema_version = cursor.u16()?;
     let plan_hash = strings.get(cursor.u16()?)?.to_string();
+    let origin = match cursor.u8()? {
+        0 => None,
+        _ => Some(strings.get(cursor.u16()?)?.to_string()),
+    };
 
     let param_count = cursor.u32()? as usize;
     let mut params = BTreeMap::new();
@@ -497,6 +510,7 @@ pub fn decode_run(bytes: &[u8]) -> Result<Run, CodecError> {
     Ok(Run {
         schema_version,
         plan_hash,
+        origin,
         params,
         entries,
     })

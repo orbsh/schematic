@@ -104,6 +104,22 @@ fn a_run_round_trips_and_keeps_its_order() {
     assert_eq!(back.entries[1].pass, 1);
 }
 
+/// A run carries the address it started from, and the two states are distinct on
+/// the wire: `None` means "the host did not say", which is not the same as an
+/// origin spelled as an empty string.
+#[test]
+fn a_run_carries_its_origin_and_says_when_it_has_none() {
+    use schematic::Run;
+
+    let rooted = Run::new("sha256:abc").with_origin("skill:37/9");
+    assert_eq!(decode_run(&encode_run(&rooted)).unwrap(), rooted);
+
+    let bare = Run::new("sha256:abc");
+    let back = decode_run(&encode_run(&bare)).unwrap();
+    assert_eq!(back, bare);
+    assert_eq!(back.origin, None);
+}
+
 /// References parse into the three shapes the model has, and anything else is not a
 /// reference (so it stays a literal).
 #[test]

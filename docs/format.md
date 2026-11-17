@@ -9,7 +9,7 @@ All integers are little-endian. `u16` indices point into the document's own stri
 ## Frame
 
     magic            4 bytes   "SCHM"
-    format_version   u16       currently 1
+    format_version   u16       currently 4
     kind             u8        1 = plan, 2 = run
     flags            u8        must be 0
     body_len         u32
@@ -21,7 +21,7 @@ truncated tail is caught rather than silently ignored.
 
 Version 2 replaced the five kind tags (`ask`, `approve`, `emit`) with the three primitives and
 gave a request a structured form instead of an opaque schema string. Version 3 added the `end`
-terminal tag.
+terminal tag. Version 4 gave a run its `origin`: the address the host started it from, which this crate carries and never interprets.
 
 ## String table (both kinds)
 

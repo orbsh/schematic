@@ -16,8 +16,9 @@ pub const PLAN_SCHEMA_VERSION: u16 = 1;
 
 /// The binary layout version of [`crate::codec`]. Version 2 replaced the five kind tags
 /// (`ask`, `approve`, `emit`) with the three primitives, and gave a request a structure
-/// instead of an opaque schema string. Version 3 added the `end` terminal tag.
-pub const FORMAT_VERSION: u16 = 3;
+/// instead of an opaque schema string. Version 3 added the `end` terminal tag;
+/// version 4 gave a run its `origin`.
+pub const FORMAT_VERSION: u16 = 4;
 
 /// A step's handle. Names, not numbers: a plan is read by people and by diagrams, and
 /// `$.summarize.paths` says more than `$.7.paths` at no cost (the binary form interns it).
@@ -411,6 +412,14 @@ pub struct Entry {
 pub struct Run {
     pub schema_version: u16,
     pub plan_hash: String,
+    /// Where this run came FROM, in the host's own spelling (`skill:37/9` for
+    /// gravity). This crate never interprets it: the address of a definition is
+    /// the host's vocabulary, and the engine's business is the plan's identity
+    /// (`plan_hash`), not its location. A run that outlives the turn that started
+    /// it needs both — the hash to know it is still the same definition, the
+    /// origin to know which one to ask.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub params: BTreeMap<String, Value>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -422,9 +431,16 @@ impl Run {
         Self {
             schema_version: PLAN_SCHEMA_VERSION,
             plan_hash: plan_hash.into(),
+            origin: None,
             params: BTreeMap::new(),
             entries: Vec::new(),
         }
+    }
+
+    /// The same run, rooted at the address it was started from.
+    pub fn with_origin(mut self, origin: impl Into<String>) -> Self {
+        self.origin = Some(origin.into());
+        self
     }
 
     pub fn entry(&self, step: &str, pass: u32, attempt: u32) -> Option<&Entry> {
